@@ -18,4 +18,13 @@ connection.connect(error => {
     console.log('Conectado a la base de datos MySQL');
 });
 
+connection.query("SELECT 1 + 1 AS test", (error, results) => {
+    if (error) {
+        console.error("❌ Error en la conexión a MySQL:", error);
+    } else {
+        console.log("✅ Conexión a MySQL establecida correctamente:", results);
+    }
+});
+
+
 module.exports = connection;

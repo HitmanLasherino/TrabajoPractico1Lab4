@@ -35,7 +35,7 @@ router.get('/noticias', (req, res) => {
 });
 
 // Actualizar una noticia (Modificación)
-router.put('/noticias/:id', upload.single('imagen'), (req, res) => {
+router.put('/noticias/porid/:id', upload.single('imagen'), (req, res) => {
     const { id } = req.params;
     const { titulo, resumen, contenidoHTML, publicada, fechaPublicacion, idEmpresa } = req.body;
     const imagen = req.file ? req.file.filename : null;
@@ -46,8 +46,30 @@ router.put('/noticias/:id', upload.single('imagen'), (req, res) => {
     });
 });
 
+// Baja lógica de una noticia (cambiar Publicada de 'Y' a 'N' y viceversa)
+router.put('/noticias/baja/:id', (req, res) => {
+    const { id } = req.params;
+    
+    // Obtener el estado actual de la noticia
+    connection.query('SELECT Publicada FROM Noticia WHERE Id = ?', [id], (error, results) => {
+        if (error) return res.status(500).json({ message: 'Error al obtener la noticia', error });
+
+        if (results.length === 0) return res.status(404).json({ message: 'Noticia no encontrada' });
+
+        const nuevaPublicada = results[0].Publicada === 'Y' ? 'N' : 'Y';
+
+        // Actualizar el estado de la noticia
+        const query = 'UPDATE Noticia SET Publicada = ? WHERE Id = ?';
+        connection.query(query, [nuevaPublicada, id], (err, result) => {
+            if (err) return res.status(500).json({ message: 'Error al actualizar la noticia', error: err });
+
+            res.status(200).json({ message: `Noticia actualizada a estado: ${nuevaPublicada}` });
+        });
+    });
+});
+
 // Eliminar una noticia (Baja)
-router.delete('/noticias/:id', (req, res) => {
+router.delete('/noticias/delete/:id', (req, res) => {
     const { id } = req.params;
     const query = 'DELETE FROM Noticia WHERE Id = ?';
     connection.query(query, [id], (err, result) => {
@@ -56,7 +78,7 @@ router.delete('/noticias/:id', (req, res) => {
     });
 });
 
-router.get('/noticia/:idEmpresa', (req, res) => {
+router.get('/noticias/empresaid/:idEmpresa', (req, res) => {
     const { idEmpresa } = req.params;
     const query = `
         SELECT Id, Titulo, Resumen, Imagen 
@@ -93,27 +115,39 @@ router.get('/noticias/:id', (req, res) => {
 // Endpoint de búsqueda de noticias (filtrado por título o resumen, orden descendente y paginación)
 router.get('/noticia/buscar', (req, res) => {
     const { texto, pagina = 1 } = req.query;
+    console.log("🔍 Buscando noticias con:", texto);
+
     const noticiasPorPagina = 20;
     const offset = (pagina - 1) * noticiasPorPagina;
 
     const query = `
-    SELECT * FROM Noticia
-    WHERE Titulo COLLATE UTF8_GENERAL_CI LIKE ? OR Resumen COLLATE UTF8_GENERAL_CI LIKE ?
-    ORDER BY FechaPublicacion DESC
-    LIMIT ? OFFSET ?
+        SELECT Id, Titulo, Resumen, Imagen, FechaPublicacion 
+        FROM Noticia
+        WHERE Publicada = 'Y' 
+        AND (LOWER(Titulo) LIKE LOWER(?) OR LOWER(Resumen) LIKE LOWER(?))
+        ORDER BY FechaPublicacion DESC
+        LIMIT ? OFFSET ?
     `;
 
     const searchText = `%${texto}%`;
 
+    console.log("🛠️ Query ejecutada:", query);
+    console.log("🔍 Parámetros:", [searchText, searchText, noticiasPorPagina, offset]);
+
     connection.query(query, [searchText, searchText, noticiasPorPagina, offset], (error, results) => {
         if (error) {
+            console.error("❌ Error en la consulta:", error);
             return res.status(500).json({ message: 'Error al obtener las noticias', error });
         }
 
-        // ✅ Importante: devolver [] aunque no haya resultados, no un mensaje de error
+        console.log("✅ Resultados obtenidos:", results);
         res.status(200).json(results);
     });
 });
+
+
+
+
 
 // Obtener las últimas 5 noticias publicadas de una empresa específica
 router.get('/noticias/empresa/:idEmpresa', (req, res) => {
@@ -133,4 +167,29 @@ router.get('/noticias/empresa/:idEmpresa', (req, res) => {
         res.status(200).json(results);
     });
 });
+
+// Nueva API para buscar noticias con la palabra "tech"
+router.get('/noticias/buscar-tech', (req, res) => {
+    const query = `
+        SELECT Id, Titulo, Resumen, Imagen, FechaPublicacion 
+        FROM Noticia
+        WHERE Publicada = 'Y' 
+        AND (LOWER(Titulo) LIKE '%tech%' OR LOWER(Resumen) LIKE '%tech%')
+        ORDER BY FechaPublicacion DESC
+    `;
+
+    console.log("🛠️ Ejecutando consulta SQL:", query); // 🔍 Ver qué consulta se ejecuta
+
+    connection.query(query, (error, results) => {
+        if (error) {
+            console.error("❌ Error en la consulta de noticias con 'tech':", error);
+            return res.status(500).json({ message: 'Error al obtener las noticias', error });
+        }
+
+        console.log("✅ Resultados obtenidos en la API:", results); // 🔍 Ver qué devuelve MySQL
+        res.status(200).json(results);
+    });
+});
+
+
 module.exports = router;
