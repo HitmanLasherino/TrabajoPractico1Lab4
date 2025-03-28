@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Noticias</title>
+    
+    <!-- TinyMCE sin API Key -->
+    <script src="https://cdn.jsdelivr.net/npm/tinymce@5/tinymce.min.js"></script>
+
+    <!-- Bootstrap -->
+    <link href="css/bootstrap.css" rel="stylesheet">
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            // Inicializar TinyMCE
+            tinymce.init({
+                selector: 'textarea#editorHtml',
+                height: 400,
+                menubar: 'file edit view insert format tools table help',
+                plugins: 'autolink lists link image preview searchreplace fullscreen code',
+                toolbar: 'undo redo | bold italic underline | alignleft aligncenter alignright | link image code',
+                content_css: 'css/bootstrap.css'
+            });
+
+            // Cargar noticias en la tabla al inicio
+            cargarNoticias();
+        });
+
+        // Función para cargar noticias
+        function cargarNoticias() {
+            fetch('http://localhost:3000/api/noticias')
+                .then(response => response.json())
+                .then(noticias => {
+                    const tbody = document.querySelector("#tablaNoticias tbody");
+                    tbody.innerHTML = ""; // Limpiar la tabla
+
+                    noticias.forEach(noticia => {
+                        const row = document.createElement("tr");
+
+                        row.innerHTML = `
+                            <td>${noticia.Id}</td>
+                            <td>${noticia.Titulo}</td>
+                            <td>${noticia.Resumen}</td>
+                            <td>${noticia.Publicada === 'Y' ? 'Sí' : 'No'}</td>
+                            <td>
+                                <button class="btn btn-warning" onclick="editarNoticia(${noticia.Id})">Editar</button>
+                                <button class="btn btn-danger" onclick="borrarNoticia(${noticia.Id})">Eliminar</button>
+                                <button class="btn btn-secondary" onclick="togglePublicada(${noticia.Id})">
+                                    ${noticia.Publicada === 'Y' ? 'Despublicar' : 'Publicar'}
+                                </button>
+                            </td>
+                        `;
+
+                        tbody.appendChild(row);
+                    });
+                })
+                .catch(error => console.error("Error al cargar noticias:", error));
+        }
+
+        // Crear o actualizar noticia
+        function guardarNoticia() {
+            const formData = new FormData();
+            const idNoticia = document.getElementById("idNoticia").value;
+            formData.append("titulo", document.getElementById("titulo").value);
+            formData.append("resumen", document.getElementById("resumen").value);
+            formData.append("contenidoHTML", tinymce.get("editorHtml").getContent());
+            formData.append("fechaPublicacion", document.getElementById("fechaPublicacion").value);
+            formData.append("idEmpresa", document.getElementById("idEmpresa").value);
+            formData.append("publicada", document.getElementById("publicada").checked ? 'Y' : 'N');
+            const imagenInput = document.getElementById("imagen");
+            if (imagenInput.files.length > 0) {
+                formData.append("imagen", imagenInput.files[0]);
+            }
+
+            const method = idNoticia ? "PUT" : "POST";
+            const url = idNoticia ? `http://localhost:3000/api/noticias/porid/${idNoticia}` : "http://localhost:3000/api/noticias";
+
+            fetch(url, {
+                method: method,
+                body: formData
+            })
+            .then(() => {
+                alert("Noticia guardada con éxito");
+                cargarNoticias();
+                limpiarFormulario();
+            })
+            .catch(error => console.error("Error al guardar noticia:", error));
+            }  
+
+        // Cargar datos en el formulario para editar
+        function editarNoticia(id) {
+            fetch(`http://localhost:3000/api/noticias/${id}`)
+                .then(response => response.json())
+                .then(noticia => {
+                    document.getElementById("idNoticia").value = noticia.Id;
+                    document.getElementById("titulo").value = noticia.Titulo;
+                    document.getElementById("resumen").value = noticia.Resumen;
+                    tinymce.get("editorHtml").setContent(noticia.ContenidoHTML);
+                    document.getElementById("fechaPublicacion").value = noticia.FechaPublicacion.split("T")[0];
+                    document.getElementById("idEmpresa").value = noticia.idEmpresa;
+                    document.getElementById("publicada").checked = noticia.Publicada === 'Y';
+                })
+                .catch(error => console.error("Error al cargar noticia para editar:", error));
+        }
+
+        // Eliminar noticia
+        function borrarNoticia(id) {
+            if (confirm("¿Seguro que quieres eliminar esta noticia?")) {
+                fetch(`http://localhost:3000/api/noticias/delete/${id}`, { method: "DELETE" })
+                .then(() => {
+                    alert("Noticia eliminada con éxito");
+                    cargarNoticias();
+                })
+                .catch(error => console.error("Error al eliminar noticia:", error));
+            }
+        }
+
+        // Alternar estado Publicada (baja lógica)
+        function togglePublicada(id) {
+            fetch(`http://localhost:3000/api/noticias/baja/${id}`, { method: "PUT" })
+                .then(() => {
+                    alert("Estado de la noticia actualizado");
+                    cargarNoticias();
+                })
+                .catch(error => console.error("Error al actualizar estado de publicación:", error));
+        }
+
+        // Limpiar formulario
+        function limpiarFormulario() {
+            document.getElementById("idNoticia").value = "";
+            document.getElementById("titulo").value = "";
+            document.getElementById("resumen").value = "";
+            tinymce.get("editorHtml").setContent("");
+            document.getElementById("fechaPublicacion").value = "";
+            document.getElementById("idEmpresa").value = "";
+            document.getElementById("publicada").checked = false;
+        }
+    </script>
+</head>
+<body class="container">
+
+    <h1>Gestión de Noticias</h1>
+
+    <!-- Formulario de Noticias -->
+    <form onsubmit="guardarNoticia(); return false;" enctype="multipart/form-data">
+        <input type="hidden" id="idNoticia">
+        
+        <div class="form-group">
+            <label for="titulo">Título:</label>
+            <input type="text" id="titulo" class="form-control" required>
+        </div>
+
+        <div class="form-group">
+            <label for="resumen">Resumen:</label>
+            <input type="text" id="resumen" class="form-control" required>
+        </div>
+
+        <div class="form-group">
+            <label for="editorHtml">Contenido:</label>
+            <textarea id="editorHtml"></textarea>
+        </div>
+
+        <div class="form-group">
+            <label for="fechaPublicacion">Fecha de Publicación:</label>
+            <input type="date" id="fechaPublicacion" class="form-control" required>
+        </div>
+
+        <div class="form-group">
+            <label for="idEmpresa">ID Empresa:</label>
+            <input type="number" id="idEmpresa" class="form-control" required>
+        </div>
+
+        <div class="form-group">
+            <label for="publicada">Publicada:</label>
+            <input type="checkbox" id="publicada">
+        </div>
+
+        <div class="form-group">
+            <label for="imagen">Imagen:</label>
+            <input type="file" id="imagen" class="form-control">
+        </div>
+
+        <button type="submit" class="btn btn-primary">Guardar Noticia</button>
+        <button type="button" class="btn btn-secondary" onclick="limpiarFormulario()">Cancelar</button>
+    </form>
+
+    <hr>
+
+    <!-- Tabla de Noticias -->
+    <h2>Noticias</h2>
+    <table class="table table-bordered" id="tablaNoticias">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Título</th>
+                <th>Resumen</th>
+                <th>Publicada</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+</body>
+</html>
